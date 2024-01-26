@@ -18,7 +18,7 @@
 
 #define SSID "<<SET SSID HERE>>"
 #define PASSWORD "<<SET PASSWORD HERE>>"
-#define DISCORD_MESSAGE_URL "Bot <<SET DISCORD_MESSAGE_URL HERE>>"
+#define DISCORD_MESSAGE_URL "<<SET DISCORD_MESSAGE_URL HERE>>"
 #define DISCORD_TOKEN "Bot <<SET DISCORD_TOKEN HERE>>"
 
 #define PING_INTERVAL 900000 // 15min
@@ -33,7 +33,7 @@ bool gFirstLoop = true;
 bool gEnabled = true;
 bool gLastState = false;
 
-time_t lastDetectedTime = time(NULL);
+time_t lastDetectedTime = 0;
 int waitingTime = 0;
 
 void notify() {
@@ -53,6 +53,21 @@ void notify() {
   }
 }
 
+int get_test() {
+  String url = "https://www.google.com";
+  HTTPClient http;
+  if (http.begin(url)) {
+    http.setConnectTimeout(5000);
+    Serial.println("begin succeed");
+    int response = http.GET();
+    http.end();
+    return response;
+  } else {
+    http.end();
+    return 1;
+  }
+}
+
 static boolean draw_waveform() {
   static int16_t val_buf[MAX_LEN] = {0};
   static int16_t pt = MAX_LEN - 1;
@@ -68,6 +83,9 @@ static boolean draw_waveform() {
   time_t now = time(NULL);
   double diff = difftime(now, lastDetectedTime);
   waitingTime = NOTIFY_PERIOD - diff;
+  if (lastDetectedTime == 0) {
+    diff = NOTIFY_PERIOD + 1;
+  }
   if (gLastState != state) {
     gLastState = state;
     if (state) {
@@ -131,7 +149,24 @@ void loop() {
   int deltaMs = currentTime - gLastLoopAt;
   gLastLoopAt = currentTime;
 
-  M5.Lcd.setTextSize(5);
+  // 一定期間ごとにpingとしてリクエストを送る
+  gPingTimer -= deltaMs;
+  if (gPingTimer < 0) {
+    if (get_test() == 200) {
+      http_status_code = 201;
+      gPingTimer = PING_INTERVAL;
+    } else {
+      http_status_code = 500;
+      esp_restart();
+    }
+  }
+
+  if (M5.BtnA.wasReleased()){
+    esp_restart();
+  }
+
+  M5.Lcd.fillRect(0,0,240,40,BLACK);
+  M5.Lcd.setTextSize(4);
   M5.Lcd.drawString(http_status_code, 10, 10);
 
   M5.Lcd.fillRect(160,0,80,30,BLACK);
